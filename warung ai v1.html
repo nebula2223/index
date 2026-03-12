@@ -1,0 +1,1096 @@
+
+# Aplikasi Kasir AI Warung Lokal - TensorFlow.js + IndexedDB
+# Single File HTML Application
+
+html_code = '''<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kasir AI Warung Lokal</title>
+    
+    <!-- TensorFlow.js CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.10.0/dist/tf.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/mobilenet@2.1.0/dist/mobilenet.min.js"></script>
+    
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 10px;
+        }
+        
+        .container {
+            max-width: 480px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            overflow: hidden;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            text-align: center;
+        }
+        
+        .header h1 { font-size: 1.5rem; margin-bottom: 5px; }
+        .header p { font-size: 0.9rem; opacity: 0.9; }
+        
+        .camera-section {
+            position: relative;
+            background: #000;
+        }
+        
+        #video {
+            width: 100%;
+            height: 300px;
+            object-fit: cover;
+            display: block;
+        }
+        
+        #canvas { display: none; }
+        
+        .camera-overlay {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            right: 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .status-badge {
+            background: rgba(0,0,0,0.7);
+            color: white;
+            padding: 8px 12px;
+            border-radius: 20px;
+            font-size: 0.75rem;
+        }
+        
+        .btn-capture {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 70px;
+            height: 70px;
+            border-radius: 50%;
+            border: 4px solid white;
+            background: #ff4757;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        
+        .btn-capture:active {
+            transform: translateX(-50%) scale(0.95);
+            background: #ff3344;
+        }
+        
+        .btn-capture::after {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            background: white;
+        }
+        
+        .tabs {
+            display: flex;
+            background: #f8f9fa;
+            border-bottom: 1px solid #dee2e6;
+        }
+        
+        .tab {
+            flex: 1;
+            padding: 15px;
+            text-align: center;
+            cursor: pointer;
+            font-weight: 600;
+            color: #6c757d;
+            transition: all 0.3s;
+            border-bottom: 3px solid transparent;
+        }
+        
+        .tab.active {
+            color: #667eea;
+            border-bottom-color: #667eea;
+            background: white;
+        }
+        
+        .content {
+            padding: 20px;
+            min-height: 400px;
+        }
+        
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+        
+        .form-group { margin-bottom: 15px; }
+        
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 600;
+            color: #333;
+            font-size: 0.9rem;
+        }
+        
+        .form-group input, .form-group select {
+            width: 100%;
+            padding: 12px 15px;
+            border: 2px solid #e0e0e0;
+            border-radius: 10px;
+            font-size: 1rem;
+            transition: border-color 0.3s;
+        }
+        
+        .form-group input:focus, .form-group select:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        
+        .btn {
+            width: 100%;
+            padding: 15px;
+            border: none;
+            border-radius: 12px;
+            font-size: 1rem;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.3s;
+            margin-bottom: 10px;
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        
+        .btn-primary:active { transform: scale(0.98); }
+        
+        .btn-success {
+            background: linear-gradient(135deg, #00b894 0%, #00a085 100%);
+            color: white;
+        }
+        
+        .btn-danger {
+            background: linear-gradient(135deg, #ff7675 0%, #d63031 100%);
+            color: white;
+        }
+        
+        .btn-warning {
+            background: linear-gradient(135deg, #fdcb6e 0%, #e17055 100%);
+            color: white;
+        }
+        
+        .btn-large { padding: 20px; font-size: 1.2rem; }
+        
+        .result-box {
+            background: #f8f9fa;
+            border-radius: 15px;
+            padding: 20px;
+            margin-top: 15px;
+            text-align: center;
+            border: 2px dashed #dee2e6;
+        }
+        
+        .result-box.has-result {
+            border-color: #00b894;
+            background: #e8f5e9;
+        }
+        
+        .result-box.confused {
+            border-color: #fdcb6e;
+            background: #fff3cd;
+        }
+        
+        .product-card {
+            background: white;
+            border-radius: 15px;
+            padding: 15px;
+            margin-bottom: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+        
+        .product-img {
+            width: 60px;
+            height: 60px;
+            border-radius: 10px;
+            object-fit: cover;
+            background: #e0e0e0;
+        }
+        
+        .product-info { flex: 1; }
+        
+        .product-name {
+            font-weight: 700;
+            color: #333;
+            margin-bottom: 3px;
+        }
+        
+        .product-price {
+            color: #00b894;
+            font-weight: 600;
+            font-size: 1.1rem;
+        }
+        
+        .product-category {
+            display: inline-block;
+            padding: 3px 8px;
+            border-radius: 5px;
+            font-size: 0.7rem;
+            margin-top: 5px;
+        }
+        
+        .category-inti { background: #667eea; color: white; }
+        .category-sekunder { background: #fdcb6e; color: #333; }
+        .category-baru {
+            background: #ff7675;
+            color: white;
+            animation: pulse 2s infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+        
+        .product-actions {
+            display: flex;
+            gap: 5px;
+        }
+        
+        .btn-small {
+            padding: 8px 12px;
+            font-size: 0.8rem;
+            border-radius: 8px;
+            border: none;
+            cursor: pointer;
+            font-weight: 600;
+        }
+        
+        .btn-sell { background: #00b894; color: white; }
+        .btn-delete { background: #ff7675; color: white; }
+        
+        .transaction-item {
+            background: white;
+            border-radius: 10px;
+            padding: 12px;
+            margin-bottom: 8px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 1px 5px rgba(0,0,0,0.05);
+        }
+        
+        .transaction-info h4 {
+            font-size: 0.95rem;
+            color: #333;
+        }
+        
+        .transaction-info p {
+            font-size: 0.75rem;
+            color: #6c757d;
+        }
+        
+        .transaction-amount {
+            font-weight: 700;
+            color: #00b894;
+            font-size: 1.1rem;
+        }
+        
+        .empty-state {
+            text-align: center;
+            padding: 40px;
+            color: #6c757d;
+        }
+        
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(255,255,255,.3);
+            border-radius: 50%;
+            border-top-color: white;
+            animation: spin 1s ease-in-out infinite;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+        
+        .modal.active { display: flex; }
+        
+        .modal-content {
+            background: white;
+            border-radius: 20px;
+            padding: 25px;
+            max-width: 400px;
+            width: 100%;
+            text-align: center;
+        }
+        
+        .modal-title {
+            font-size: 1.3rem;
+            margin-bottom: 15px;
+            color: #333;
+        }
+        
+        .modal-text {
+            color: #6c757d;
+            margin-bottom: 20px;
+        }
+        
+        .modal-buttons {
+            display: flex;
+            gap: 10px;
+        }
+        
+        .modal-buttons .btn {
+            flex: 1;
+            margin-bottom: 0;
+        }
+        
+        .stats-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        
+        .stat-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 15px;
+            border-radius: 12px;
+            text-align: center;
+        }
+        
+        .stat-value { font-size: 1.5rem; font-weight: 700; }
+        .stat-label { font-size: 0.75rem; opacity: 0.9; }
+        
+        .preview-img {
+            width: 100%;
+            max-height: 200px;
+            object-fit: cover;
+            border-radius: 10px;
+            margin-bottom: 15px;
+        }
+        
+        .similarity-bar {
+            width: 100%;
+            height: 10px;
+            background: #e0e0e0;
+            border-radius: 5px;
+            overflow: hidden;
+            margin-top: 10px;
+        }
+        
+        .similarity-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #00b894, #00a085);
+            transition: width 0.5s;
+        }
+        
+        .hidden { display: none !important; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <div class="header">
+            <h1>🛒 Kasir AI Warung</h1>
+            <p>Scan Produk • Cepat & Akurat</p>
+        </div>
+        
+        <!-- Camera Section -->
+        <div class="camera-section">
+            <video id="video" autoplay playsinline></video>
+            <canvas id="canvas"></canvas>
+            <div class="camera-overlay">
+                <span class="status-badge" id="modelStatus">⏳ Loading AI...</span>
+                <span class="status-badge" id="dbStatus">⏳ DB...</span>
+            </div>
+            <button class="btn-capture" id="btnCapture" onclick="captureAndIdentify()"></button>
+        </div>
+        
+        <!-- Tabs -->
+        <div class="tabs">
+            <div class="tab active" onclick="switchTab('scan')">📷 Scan</div>
+            <div class="tab" onclick="switchTab('daftar')">➕ Daftar</div>
+            <div class="tab" onclick="switchTab('produk')">📦 Produk</div>
+            <div class="tab" onclick="switchTab('laporan')">📊 Laporan</div>
+        </div>
+        
+        <!-- Content -->
+        <div class="content">
+            <!-- Tab: Scan -->
+            <div id="tab-scan" class="tab-content active">
+                <div class="result-box" id="scanResult">
+                    <p>📸 Arahkan kamera ke produk lalu tekan tombol merah untuk scan</p>
+                </div>
+                <div id="scanActions" class="hidden">
+                    <button class="btn btn-success btn-large" onclick="confirmSale()">✅ Konfirmasi Penjualan</button>
+                    <button class="btn btn-warning" onclick="manualSelect()">🔍 Pilih Manual</button>
+                </div>
+            </div>
+            
+            <!-- Tab: Daftar Produk -->
+            <div id="tab-daftar" class="tab-content">
+                <div class="form-group">
+                    <label>Preview Foto</label>
+                    <img id="previewImg" class="preview-img" style="display:none;">
+                    <button class="btn btn-primary" onclick="takeRegistrationPhoto()">📷 Ambil Foto Produk</button>
+                </div>
+                
+                <div class="form-group">
+                    <label>Nama Barang</label>
+                    <input type="text" id="regName" placeholder="Contoh: Indomie Goreng">
+                </div>
+                
+                <div class="form-group">
+                    <label>Harga (Rp)</label>
+                    <input type="number" id="regPrice" placeholder="Contoh: 3500">
+                </div>
+                
+                <div class="form-group">
+                    <label>Kategori</label>
+                    <select id="regCategory">
+                        <option value="inti">⭐ Inti (Produk Utama)</option>
+                        <option value="sekunder">📌 Sekunder (Produk Tambahan)</option>
+                    </select>
+                </div>
+                
+                <button class="btn btn-success btn-large" onclick="registerProduct()">💾 Simpan Produk</button>
+            </div>
+            
+            <!-- Tab: Daftar Produk -->
+            <div id="tab-produk" class="tab-content">
+                <div id="productList">
+                    <div class="empty-state">
+                        <p>📭 Belum ada produk terdaftar</p>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Tab: Laporan -->
+            <div id="tab-laporan" class="tab-content">
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-value" id="statTotal">0</div>
+                        <div class="stat-label">Total Transaksi</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="statRevenue">Rp0</div>
+                        <div class="stat-label">Total Pendapatan</div>
+                    </div>
+                </div>
+                
+                <button class="btn btn-primary" onclick="exportCSV()">📥 Export ke Excel (CSV)</button>
+                
+                <div style="margin-top: 20px;">
+                    <h3 style="margin-bottom: 15px; color: #333;">📋 Riwayat Transaksi</h3>
+                    <div id="transactionList">
+                        <div class="empty-state">
+                            <p>📭 Belum ada transaksi</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Modal Konfirmasi -->
+    <div class="modal" id="confirmModal">
+        <div class="modal-content">
+            <h3 class="modal-title">⚠️ AI Tidak Yakin</h3>
+            <p class="modal-text" id="modalText">Keyakinan rendah. Pilih produk secara manual?</p>
+            <div class="modal-buttons">
+                <button class="btn btn-primary" onclick="closeModal()">Coba Lagi</button>
+                <button class="btn btn-warning" onclick="manualSelect()">Pilih Manual</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Modal Manual Select -->
+    <div class="modal" id="manualModal">
+        <div class="modal-content">
+            <h3 class="modal-title">🔍 Pilih Produk</h3>
+            <div id="manualProductList" style="max-height: 300px; overflow-y: auto; margin-bottom: 15px;">
+            </div>
+            <button class="btn" onclick="closeManualModal()">Batal</button>
+        </div>
+    </div>
+
+    <script>
+        // ==================== GLOBAL VARIABLES ====================
+        let model = null;
+        let db = null;
+        let video = document.getElementById('video');
+        let canvas = document.getElementById('canvas');
+        let ctx = canvas.getContext('2d');
+        let currentScanResult = null;
+        let registrationPhotoData = null;
+        
+        const DB_NAME = 'KasirAI_DB';
+        const DB_VERSION = 1;
+        const STORE_PRODUCTS = 'products';
+        const STORE_TRANSACTIONS = 'transactions';
+        
+        // ==================== INITIALIZATION ====================
+        document.addEventListener('DOMContentLoaded', async () => {
+            await initDB();
+            await initCamera();
+            await loadModel();
+            loadProducts();
+            loadTransactions();
+        });
+        
+        // ==================== DATABASE (IndexedDB) ====================
+        function initDB() {
+            return new Promise((resolve, reject) => {
+                const request = indexedDB.open(DB_NAME, DB_VERSION);
+                
+                request.onerror = () => {
+                    updateStatus('dbStatus', '❌ DB Error', 'red');
+                    reject(request.error);
+                };
+                
+                request.onsuccess = () => {
+                    db = request.result;
+                    updateStatus('dbStatus', '✅ DB Ready', 'green');
+                    resolve();
+                };
+                
+                request.onupgradeneeded = (event) => {
+                    const database = event.target.result;
+                    
+                    // Products store
+                    if (!database.objectStoreNames.contains(STORE_PRODUCTS)) {
+                        const productStore = database.createObjectStore(STORE_PRODUCTS, { keyPath: 'id', autoIncrement: true });
+                        productStore.createIndex('name', 'name', { unique: false });
+                    }
+                    
+                    // Transactions store
+                    if (!database.objectStoreNames.contains(STORE_TRANSACTIONS)) {
+                        const transStore = database.createObjectStore(STORE_TRANSACTIONS, { keyPath: 'id', autoIncrement: true });
+                        transStore.createIndex('date', 'date', { unique: false });
+                    }
+                };
+            });
+        }
+        
+        // ==================== TENSORFLOW.JS MODEL ====================
+        async function loadModel() {
+            try {
+                updateStatus('modelStatus', '⏳ Loading...', 'yellow');
+                model = await mobilenet.load({ version: 2, alpha: 1.0 });
+                updateStatus('modelStatus', '✅ AI Ready', 'green');
+            } catch (error) {
+                console.error('Model load error:', error);
+                updateStatus('modelStatus', '❌ AI Error', 'red');
+            }
+        }
+        
+        // ==================== CAMERA ====================
+        async function initCamera() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({
+                    video: { facingMode: 'environment', width: { ideal: 640 }, height: { ideal: 480 } }
+                });
+                video.srcObject = stream;
+            } catch (error) {
+                console.error('Camera error:', error);
+                alert('Tidak dapat mengakses kamera. Pastikan izin kamera diberikan.');
+            }
+        }
+        
+        // ==================== IMAGE PROCESSING ====================
+        function captureImage() {
+            canvas.width = video.videoWidth || 640;
+            canvas.height = video.videoHeight || 480;
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            return canvas.toDataURL('image/jpeg', 0.8);
+        }
+        
+        async function extractFeatures(imageDataUrl) {
+            const img = new Image();
+            img.src = imageDataUrl;
+            await new Promise(resolve => { img.onload = resolve; });
+            
+            const tensor = tf.browser.fromPixels(img)
+                .resizeNearestNeighbor([224, 224])
+                .toFloat()
+                .expandDims();
+            
+            const features = model.infer(tensor, 'conv_preds');
+            const featureArray = await features.data();
+            
+            tensor.dispose();
+            features.dispose();
+            
+            return Array.from(featureArray);
+        }
+        
+        // ==================== SIMILARITY CALCULATION ====================
+        function cosineSimilarity(a, b) {
+            let dotProduct = 0;
+            let normA = 0;
+            let normB = 0;
+            
+            for (let i = 0; i < a.length; i++) {
+                dotProduct += a[i] * b[i];
+                normA += a[i] * a[i];
+                normB += b[i] * b[i];
+            }
+            
+            return dotProduct / (Math.sqrt(normA) * Math.sqrt(normB));
+        }
+        
+        function euclideanDistance(a, b) {
+            let sum = 0;
+            for (let i = 0; i < a.length; i++) {
+                sum += Math.pow(a[i] - b[i], 2);
+            }
+            return Math.sqrt(sum);
+        }
+        
+        // ==================== SCAN & IDENTIFY ====================
+        async function captureAndIdentify() {
+            if (!model) {
+                alert('Model AI masih loading, tunggu sebentar...');
+                return;
+            }
+            
+            const scanResult = document.getElementById('scanResult');
+            const scanActions = document.getElementById('scanActions');
+            
+            scanResult.innerHTML = '<div class="loading"></div><p>Menganalisis gambar...</p>';
+            scanActions.classList.add('hidden');
+            
+            try {
+                // Capture and extract features
+                const imageData = captureImage();
+                const features = await extractFeatures(imageData);
+                
+                // Get all products from DB
+                const products = await getAllProducts();
+                
+                if (products.length === 0) {
+                    scanResult.innerHTML = '<p>❌ Belum ada produk terdaftar. Daftarkan produk dulu!</p>';
+                    return;
+                }
+                
+                // Find best match
+                let bestMatch = null;
+                let highestSimilarity = -1;
+                
+                for (const product of products) {
+                    if (product.features) {
+                        const similarity = cosineSimilarity(features, product.features);
+                        if (similarity > highestSimilarity) {
+                            highestSimilarity = similarity;
+                            bestMatch = product;
+                        }
+                    }
+                }
+                
+                const confidence = highestSimilarity * 100;
+                
+                if (confidence >= 80) {
+                    // High confidence match
+                    currentScanResult = { ...bestMatch, imageData };
+                    scanResult.className = 'result-box has-result';
+                    scanResult.innerHTML = `
+                        <h3>✅ ${bestMatch.name}</h3>
+                        <p class="product-price">Rp${formatPrice(bestMatch.price)}</p>
+                        <span class="product-category category-${bestMatch.category}">${bestMatch.category.toUpperCase()}</span>
+                        <div class="similarity-bar">
+                            <div class="similarity-fill" style="width: ${confidence}%"></div>
+                        </div>
+                        <small>Keyakinan: ${confidence.toFixed(1)}%</small>
+                    `;
+                    scanActions.classList.remove('hidden');
+                } else if (confidence >= 50) {
+                    // Medium confidence - ask user
+                    currentScanResult = { ...bestMatch, imageData, lowConfidence: true };
+                    scanResult.className = 'result-box confused';
+                    scanResult.innerHTML = `
+                        <h3>🤔 Mungkin: ${bestMatch.name}</h3>
+                        <p class="product-price">Rp${formatPrice(bestMatch.price)}</p>
+                        <div class="similarity-bar">
+                            <div class="similarity-fill" style="width: ${confidence}%; background: linear-gradient(90deg, #fdcb6e, #e17055)"></div>
+                        </div>
+                        <small>Keyakinan: ${confidence.toFixed(1)}%</small>
+                    `;
+                    document.getElementById('modalText').textContent = 
+                        `AI hanya ${confidence.toFixed(1)}% yakin ini adalah "${bestMatch.name}". Pilih produk secara manual?`;
+                    document.getElementById('confirmModal').classList.add('active');
+                    scanActions.classList.remove('hidden');
+                } else {
+                    // Low confidence
+                    scanResult.className = 'result-box confused';
+                    scanResult.innerHTML = `
+                        <p>❓ Produk tidak dikenali</p>
+                        <small>Keyakinan terlalu rendah (${confidence.toFixed(1)}%)</small>
+                    `;
+                    document.getElementById('modalText').textContent = 'Produk tidak dikenali dengan baik. Pilih secara manual?';
+                    document.getElementById('confirmModal').classList.add('active');
+                }
+                
+            } catch (error) {
+                console.error('Scan error:', error);
+                scanResult.innerHTML = '<p>❌ Error saat scan. Coba lagi.</p>';
+            }
+        }
+        
+        // ==================== PRODUCT REGISTRATION ====================
+        function takeRegistrationPhoto() {
+            const imageData = captureImage();
+            registrationPhotoData = imageData;
+            
+            const preview = document.getElementById('previewImg');
+            preview.src = imageData;
+            preview.style.display = 'block';
+        }
+        
+        async function registerProduct() {
+            const name = document.getElementById('regName').value.trim();
+            const price = parseInt(document.getElementById('regPrice').value);
+            const category = document.getElementById('regCategory').value;
+            
+            if (!name || !price || !registrationPhotoData) {
+                alert('Lengkapi semua field dan ambil foto produk!');
+                return;
+            }
+            
+            try {
+                // Extract features
+                const features = await extractFeatures(registrationPhotoData);
+                
+                const product = {
+                    name,
+                    price,
+                    category,
+                    image: registrationPhotoData,
+                    features,
+                    isNew: true,
+                    createdAt: new Date().toISOString()
+                };
+                
+                await addProduct(product);
+                
+                // Reset form
+                document.getElementById('regName').value = '';
+                document.getElementById('regPrice').value = '';
+                document.getElementById('previewImg').style.display = 'none';
+                registrationPhotoData = null;
+                
+                alert('✅ Produk berhasil didaftarkan!');
+                loadProducts();
+                switchTab('produk');
+                
+            } catch (error) {
+                console.error('Registration error:', error);
+                alert('❌ Gagal mendaftarkan produk');
+            }
+        }
+        
+        // ==================== DATABASE OPERATIONS ====================
+        function addProduct(product) {
+            return new Promise((resolve, reject) => {
+                const transaction = db.transaction([STORE_PRODUCTS], 'readwrite');
+                const store = transaction.objectStore(STORE_PRODUCTS);
+                const request = store.add(product);
+                
+                request.onsuccess = () => resolve(request.result);
+                request.onerror = () => reject(request.error);
+            });
+        }
+        
+        function getAllProducts() {
+            return new Promise((resolve, reject) => {
+                const transaction = db.transaction([STORE_PRODUCTS], 'readonly');
+                const store = transaction.objectStore(STORE_PRODUCTS);
+                const request = store.getAll();
+                
+                request.onsuccess = () => resolve(request.result);
+                request.onerror = () => reject(request.error);
+            });
+        }
+        
+        function deleteProduct(id) {
+            return new Promise((resolve, reject) => {
+                const transaction = db.transaction([STORE_PRODUCTS], 'readwrite');
+                const store = transaction.objectStore(STORE_PRODUCTS);
+                const request = store.delete(id);
+                
+                request.onsuccess = () => resolve();
+                request.onerror = () => reject(request.error);
+            });
+        }
+        
+        function addTransaction(transaction) {
+            return new Promise((resolve, reject) => {
+                const tx = db.transaction([STORE_TRANSACTIONS], 'readwrite');
+                const store = tx.objectStore(STORE_TRANSACTIONS);
+                const request = store.add(transaction);
+                
+                request.onsuccess = () => resolve(request.result);
+                request.onerror = () => reject(request.error);
+            });
+        }
+        
+        function getAllTransactions() {
+            return new Promise((resolve, reject) => {
+                const transaction = db.transaction([STORE_TRANSACTIONS], 'readonly');
+                const store = transaction.objectStore(STORE_TRANSACTIONS);
+                const request = store.getAll();
+                
+                request.onsuccess = () => resolve(request.result);
+                request.onerror = () => reject(request.error);
+            });
+        }
+        
+        // ==================== UI FUNCTIONS ====================
+        function switchTab(tabName) {
+            // Update tabs
+            document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
+            event.target.classList.add('active');
+            
+            // Update content
+            document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+            document.getElementById(`tab-${tabName}`).classList.add('active');
+            
+            // Refresh data
+            if (tabName === 'produk') loadProducts();
+            if (tabName === 'laporan') loadTransactions();
+        }
+        
+        async function loadProducts() {
+            const products = await getAllProducts();
+            const container = document.getElementById('productList');
+            
+            if (products.length === 0) {
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <p>📭 Belum ada produk terdaftar</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            container.innerHTML = products.map(p => `
+                <div class="product-card">
+                    <img src="${p.image}" class="product-img" alt="${p.name}">
+                    <div class="product-info">
+                        <div class="product-name">${p.name}</div>
+                        <div class="product-price">Rp${formatPrice(p.price)}</div>
+                        <span class="product-category category-${p.category} ${p.isNew ? 'category-baru' : ''}">
+                            ${p.category.toUpperCase()} ${p.isNew ? '• BARU' : ''}
+                        </span>
+                    </div>
+                    <div class="product-actions">
+                        <button class="btn-small btn-sell" onclick="quickSell(${p.id}, '${p.name}', ${p.price})">Jual</button>
+                        <button class="btn-small btn-delete" onclick="deleteProductAndRefresh(${p.id})">Hapus</button>
+                    </div>
+                </div>
+            `).join('');
+        }
+        
+        async function loadTransactions() {
+            const transactions = await getAllTransactions();
+            const container = document.getElementById('transactionList');
+            
+            // Update stats
+            const totalTrans = transactions.length;
+            const totalRevenue = transactions.reduce((sum, t) => sum + t.price, 0);
+            
+            document.getElementById('statTotal').textContent = totalTrans;
+            document.getElementById('statRevenue').textContent = 'Rp' + formatPrice(totalRevenue);
+            
+            if (transactions.length === 0) {
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <p>📭 Belum ada transaksi</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            // Sort by date descending
+            transactions.sort((a, b) => new Date(b.date) - new Date(a.date));
+            
+            container.innerHTML = transactions.map(t => `
+                <div class="transaction-item">
+                    <div class="transaction-info">
+                        <h4>${t.productName}</h4>
+                        <p>${new Date(t.date).toLocaleString('id-ID')}</p>
+                    </div>
+                    <div class="transaction-amount">Rp${formatPrice(t.price)}</div>
+                </div>
+            `).join('');
+        }
+        
+        // ==================== SALES FUNCTIONS ====================
+        async function confirmSale() {
+            if (!currentScanResult) return;
+            
+            await recordTransaction(currentScanResult);
+            
+            // Reset scan
+            document.getElementById('scanResult').innerHTML = '<p>📸 Arahkan kamera ke produk lalu tekan tombol merah untuk scan</p>';
+            document.getElementById('scanResult').className = 'result-box';
+            document.getElementById('scanActions').classList.add('hidden');
+            currentScanResult = null;
+            
+            alert('✅ Transaksi berhasil dicatat!');
+        }
+        
+        async function quickSell(id, name, price) {
+            await recordTransaction({ id, name, price });
+            alert(`✅ ${name} terjual!`);
+            loadTransactions();
+        }
+        
+        async function recordTransaction(product) {
+            const transaction = {
+                productId: product.id,
+                productName: product.name,
+                price: product.price,
+                date: new Date().toISOString()
+            };
+            
+            await addTransaction(transaction);
+        }
+        
+        async function deleteProductAndRefresh(id) {
+            if (!confirm('Yakin ingin menghapus produk ini?')) return;
+            
+            await deleteProduct(id);
+            loadProducts();
+        }
+        
+        // ==================== MANUAL SELECT ====================
+        async function manualSelect() {
+            closeModal();
+            const products = await getAllProducts();
+            const list = document.getElementById('manualProductList');
+            
+            list.innerHTML = products.map(p => `
+                <div class="product-card" onclick="selectManualProduct(${p.id}, '${p.name}', ${p.price})" style="cursor: pointer;">
+                    <img src="${p.image}" class="product-img" alt="${p.name}">
+                    <div class="product-info">
+                        <div class="product-name">${p.name}</div>
+                        <div class="product-price">Rp${formatPrice(p.price)}</div>
+                    </div>
+                </div>
+            `).join('');
+            
+            document.getElementById('manualModal').classList.add('active');
+        }
+        
+        function selectManualProduct(id, name, price) {
+            currentScanResult = { id, name, price };
+            closeManualModal();
+            
+            const scanResult = document.getElementById('scanResult');
+            scanResult.className = 'result-box has-result';
+            scanResult.innerHTML = `
+                <h3>✅ ${name} (Manual)</h3>
+                <p class="product-price">Rp${formatPrice(price)}</p>
+            `;
+            document.getElementById('scanActions').classList.remove('hidden');
+        }
+        
+        // ==================== EXPORT ====================
+        async function exportCSV() {
+            const transactions = await getAllTransactions();
+            
+            if (transactions.length === 0) {
+                alert('Belum ada transaksi untuk diexport');
+                return;
+            }
+            
+            // CSV Header
+            let csv = 'Tanggal,Nama Produk,Harga\\n';
+            
+            // CSV Data
+            transactions.forEach(t => {
+                const date = new Date(t.date).toLocaleString('id-ID');
+                csv += `"${date}","${t.productName}",${t.price}\\n`;
+            });
+            
+            // Download
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = `Laporan_Penjualan_${new Date().toISOString().split('T')[0]}.csv`;
+            link.click();
+            
+            alert('✅ File CSV berhasil diunduh!');
+        }
+        
+        // ==================== UTILITIES ====================
+        function formatPrice(price) {
+            return price.toLocaleString('id-ID');
+        }
+        
+        function updateStatus(elementId, text, color) {
+            const el = document.getElementById(elementId);
+            el.textContent = text;
+            el.style.background = color === 'green' ? 'rgba(0,184,148,0.9)' : 
+                                 color === 'red' ? 'rgba(255,118,117,0.9)' : 
+                                 'rgba(0,0,0,0.7)';
+        }
+        
+        function closeModal() {
+            document.getElementById('confirmModal').classList.remove('active');
+        }
+        
+        function closeManualModal() {
+            document.getElementById('manualModal').classList.remove('active');
+        }
+    </script>
+</body>
+</html>'''
+
+# Save to file
+with open('/mnt/kimi/output/kasir_ai_warung.html', 'w', encoding='utf-8') as f:
+    f.write(html_code)
+
+print("✅ File berhasil dibuat: kasir_ai_warung.html")
+print(f"📊 Ukuran file: {len(html_code):,} karakter")
+print("\n🚀 Cara pakai:")
+print("1. Download file HTML")
+print("2. Buka di browser HP/PC")
+print("3. Izinkan akses kamera")
+print("4. Mulai scan produk!")
